@@ -1,7 +1,9 @@
+// server.js - ReplyPilot backend using Groq
+
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
-const OpenAI = require("openai");
+const Groq = require("groq-sdk");
 
 dotenv.config();
 
@@ -9,14 +11,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Uses your OPENAI_API_KEY from env / Render
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+// Use GROQ_API_KEY from environment
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
 });
 
-// Simple test route to confirm server is running
+// Simple test route
 app.get("/", (req, res) => {
-  res.send("ReplyPilot backend is running.");
+  res.send("ReplyPilot backend (Groq) is running.");
 });
 
 // Main API endpoint used by your WordPress tool
@@ -34,14 +36,15 @@ app.post("/api/replypilot", async (req, res) => {
       return res.status(400).json({ error: "Missing review text" });
     }
 
-    const safeProduct = productName && productName.trim()
-      ? productName.trim()
-      : "the product";
+    const safeProduct =
+      productName && productName.trim()
+        ? productName.trim()
+        : "the product";
 
     const marketplaceText =
       marketplace === "lazada" ? "Lazada" : "Shopee";
 
-    // Style / language rules
+    // Language style rules
     let styleInstruction = "";
     if (language === "english") {
       styleInstruction =
@@ -92,9 +95,9 @@ ${reviewText}
 Write the best possible public reply following all the rules.
 `;
 
-    // Use chat completions API (stable and simple)
-    const completion = await client.chat.completions.create({
-      model: "gpt-4.1-mini", // or "gpt-4o-mini" if you like
+    // Call Groq chat completions (Llama 3)
+    const completion = await groq.chat.completions.create({
+      model: "llama3-8b-8192", // fast & free-ish model
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -107,18 +110,19 @@ Write the best possible public reply following all the rules.
       completion.choices?.[0]?.message?.content?.trim() ||
       "Thank you for your review!";
 
-    // Always return { reply: "..." }
+    // Always return { reply: "..." } to the frontend
     res.json({ reply: aiText });
   } catch (err) {
-    console.error("ReplyPilot API error:", err);
-    res
-      .status(500)
-      .json({ error: "Internal server error", details: err.message });
+    console.error("ReplyPilot (Groq) API error:", err);
+    res.status(500).json({
+      error: "Internal server error",
+      details: err.message || String(err),
+    });
   }
 });
 
-// Render sets process.env.PORT; default 3000 locally
+// Render will set PORT; default 3000 for local use
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`ReplyPilot server running on port ${PORT}`);
+  console.log(`ReplyPilot (Groq) server running on port ${PORT}`);
 });
