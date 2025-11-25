@@ -92,9 +92,9 @@ ${reviewText}
 Write the best possible public reply following all the rules.
 `;
 
-    // Use chat completions API (stable structure)
+    // Use chat completions API (stable and simple)
     const completion = await client.chat.completions.create({
-      model: "gpt-4.1-mini", // or "gpt-4o-mini" if you prefer
+      model: "gpt-4.1-mini", // or "gpt-4o-mini" if you like
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -107,7 +107,7 @@ Write the best possible public reply following all the rules.
       completion.choices?.[0]?.message?.content?.trim() ||
       "Thank you for your review!";
 
-    // IMPORTANT: always send back { reply: "..." }
+    // Always return { reply: "..." }
     res.json({ reply: aiText });
   } catch (err) {
     console.error("ReplyPilot API error:", err);
@@ -117,7 +117,7 @@ Write the best possible public reply following all the rules.
   }
 });
 
-// Render sets process.env.PORT; default 3000 for local
+// Render sets process.env.PORT; default 3000 locally
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`ReplyPilot server running on port ${PORT}`);
