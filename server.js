@@ -130,15 +130,15 @@ app.post("/api/replypilot", async (req, res) => {
     // Call Groq (Llama 3)
     // -----------------------------
     const completion = await groq.chat.completions.create({
-      // You can switch models here if you want
-      model: "llama3-8b-instant", // fast, good quality
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.4,
-      max_tokens: 220,
-    });
+  model: "llama-3.1-8b-instant", // correct Groq model ID
+  messages: [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userPrompt },
+  ],
+  temperature: 0.4,
+  max_tokens: 220,
+});
+
 
     const aiText =
       completion?.choices?.[0]?.message?.content?.trim() ||
@@ -169,3 +169,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ ReplyPilot (Groq) server running on port ${PORT}`);
 });
+
