@@ -95,16 +95,17 @@ ${reviewText}
 Write the best possible public reply following all the rules.
 `;
 
-    // Call Groq chat completions (Llama 3)
-    const completion = await groq.chat.completions.create({
-      model: "llama3-8b-8192", // fast & free-ish model
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.4,
-      max_tokens: 220,
-    });
+   // Call Groq chat completions (Llama 3.1)
+const completion = await groq.chat.completions.create({
+  model: "llama-3.1-8b-instant",   // ✅ current Groq model
+  messages: [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userPrompt },
+  ],
+  temperature: 0.4,
+  max_tokens: 220,
+});
+
 
     const aiText =
       completion.choices?.[0]?.message?.content?.trim() ||
@@ -126,3 +127,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`ReplyPilot (Groq) server running on port ${PORT}`);
 });
+
