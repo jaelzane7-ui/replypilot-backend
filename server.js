@@ -96,6 +96,16 @@ Write the best possible public reply following all the rules.
 app.get("/", (req, res) => {
   res.send("ReplyPilot backend (Groq) is running.");
 });
+// Simple version endpoint so we can see what code is live
+app.get("/version", (req, res) => {
+  res.json({
+    status: "ok",
+    version: "ReplyPilot v0.3 – Filipino strict language rules",
+    environment: "production",
+    backend: "Groq",
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // Main API endpoint used by your WordPress tool
 app.post("/api/replypilot", async (req, res) => {
@@ -169,4 +179,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ ReplyPilot (Groq) server running on port ${PORT}`);
 });
+
 
