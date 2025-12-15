@@ -181,9 +181,11 @@ to reviews in clear, conversational English.
 
 Rules:
 - Be brief: 2–4 sentences only.
+- Keep the total length under 45 words.
 - Always thank the customer.
 - If the review is negative, politely apologize and offer help.
 - Reply only in English (do not use Tagalog/Filipino words).
+
     `.trim(),
 
     examples: `
