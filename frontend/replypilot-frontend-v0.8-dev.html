@@ -1,0 +1,897 @@
+<!-- wp:html -->
+<!-- COMPLETE REPLYPILOT with REAL AI backend + PAYWALL -->
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+  .replypilot-container {
+    font-family: 'Inter', sans-serif;
+    background: linear-gradient(135deg, #FFF5F0 0%, #F3E8FF 50%, #EFF6FF 100%);
+    padding: 20px;
+    min-height: 100vh;
+  }
+
+  .rp-header {
+    background: white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border-bottom: 1px solid #e5e7eb;
+    padding: 20px;
+    margin: -20px -20px 20px -20px;
+  }
+
+  .rp-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .rp-logo-icon {
+    background: linear-gradient(135deg, #f97316 0%, #9333ea 100%);
+    padding: 8px;
+    border-radius: 8px;
+    color: white;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .rp-title {
+    font-size: 24px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #f97316 0%, #9333ea 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin: 0;
+  }
+
+  .rp-subtitle {
+    font-size: 14px;
+    color: #6b7280;
+    margin: 0;
+  }
+
+  .rp-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .rp-stat-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    padding: 20px;
+    border: 1px solid #f3f4f6;
+  }
+
+  .rp-stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: #111827;
+  }
+
+  .rp-stat-label {
+    font-size: 14px;
+    color: #6b7280;
+    margin-top: 4px;
+  }
+
+  .rp-main {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border: 1px solid #f3f4f6;
+    overflow: hidden;
+  }
+
+  .rp-content {
+    padding: 24px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+  }
+
+  .rp-section-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .rp-step-badge {
+    background: #9333ea;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+  }
+
+  .rp-form-group {
+    margin-bottom: 20px;
+  }
+
+  .rp-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 8px;
+  }
+
+  .rp-marketplace-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .rp-marketplace-btn {
+    padding: 16px;
+    border-radius: 8px;
+    border: 2px solid #e5e7eb;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+    color: #111827;
+    font-weight: 600;
+  }
+
+  /* Make sure inner text is dark */
+  .rp-marketplace-btn strong,
+  .rp-marketplace-btn span {
+    color: #111827;
+  }
+
+  .rp-marketplace-btn:hover {
+    border-color: #d1d5db;
+  }
+
+  .rp-marketplace-btn.active-shopee {
+    border-color: #f97316;
+    background: #fff7ed;
+  }
+
+  .rp-marketplace-btn.active-lazada {
+    border-color: #3b82f6;
+    background: #eff6ff;
+  }
+
+  .rp-rating-grid {
+    display: flex;
+    gap: 8px;
+  }
+
+  .rp-rating-btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 8px;
+    border: 2px solid #e5e7eb;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .rp-rating-btn:hover {
+    border-color: #d1d5db;
+  }
+
+  .rp-rating-btn.active {
+    border-color: #fbbf24;
+    background: #fef3c7;
+  }
+
+  .rp-input, .rp-select, .rp-textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .rp-input:focus, .rp-select:focus, .rp-textarea:focus {
+    outline: none;
+    border-color: #9333ea;
+    box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.1);
+  }
+
+  .rp-textarea {
+    resize: vertical;
+    min-height: 120px;
+  }
+
+  .rp-btn-primary {
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(135deg, #f97316 0%, #9333ea 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+  }
+
+  .rp-btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3);
+  }
+
+  .rp-btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .rp-empty-state {
+    background: #f9fafb;
+    border: 2px dashed #d1d5db;
+    border-radius: 8px;
+    padding: 48px 24px;
+    text-align: center;
+    color: #6b7280;
+  }
+
+  .rp-response-box {
+    background: linear-gradient(135deg, #faf5ff 0%, #fff7ed 100%);
+    border: 2px solid #e9d5ff;
+    border-radius: 12px;
+    padding: 24px;
+  }
+
+  .rp-response-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .rp-response-text {
+    background: white;
+    border-radius: 8px;
+    padding: 16px;
+    min-height: 150px;
+    color: #1f2937;
+    line-height: 1.6;
+    margin-bottom: 16px;
+    white-space: pre-wrap;
+  }
+
+  .rp-btn-group {
+    display: flex;
+    gap: 12px;
+  }
+
+  .rp-btn-success {
+    flex: 1;
+    padding: 12px;
+    background: #22c55e;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+  }
+
+  .rp-btn-success:hover {
+    background: #16a34a;
+  }
+
+  .rp-btn-secondary {
+    padding: 12px 24px;
+    background: #e5e7eb;
+    color: #374151;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .rp-btn-secondary:hover {
+    background: #d1d5db;
+  }
+
+  .rp-alert {
+    background: #dbeafe;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 16px;
+    display: flex;
+    gap: 12px;
+    font-size: 14px;
+    color: #1e40af;
+  }
+
+  .rp-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid white;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: rp-spin 1s linear infinite;
+  }
+
+  @keyframes rp-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .rp-hidden {
+    display: none;
+  }
+
+  .rp-badge {
+    padding: 6px 12px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .rp-badge-shopee {
+    background: #fff7ed;
+    color: #c2410c;
+  }
+
+  .rp-badge-lazada {
+    background: #eff6ff;
+    color: #1e40af;
+  }
+
+  /* Upgrade notice (inline under dropdown) */
+  .rp-upgrade-notice {
+    margin-top: 8px;
+    background: #FEF3C7;
+    border: 1px solid #FACC15;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #92400E;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .rp-upgrade-btn {
+    background: #F97316;
+    color: #fff;
+    border: none;
+    border-radius: 9999px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .rp-upgrade-btn:hover {
+    background: #ea580c;
+  }
+
+  /* Modal styles */
+  .rp-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(15,23,42,0.7);
+    display: none; /* shown via JS */
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+  }
+
+  .rp-modal-box {
+    background: #ffffff;
+    max-width: 420px;
+    width: 90%;
+    border-radius: 16px;
+    padding: 24px 20px;
+    box-shadow: 0 20px 40px rgba(15,23,42,0.3);
+  }
+
+  .rp-modal-box h2 {
+    margin-top: 0;
+    margin-bottom: 8px;
+    font-size: 20px;
+    font-weight: 700;
+    color: #111827;
+  }
+
+  .rp-modal-box p {
+    margin-top: 0;
+    margin-bottom: 12px;
+    font-size: 14px;
+    color: #4b5563;
+  }
+
+  .rp-modal-list {
+    list-style: none;
+    padding-left: 0;
+    margin: 8px 0 16px 0;
+    font-size: 14px;
+    color: #374151;
+  }
+
+  .rp-modal-list li {
+    margin-bottom: 6px;
+  }
+
+  .rp-close-btn {
+    margin-top: 8px;
+    background: transparent;
+    border: none;
+    color: #6b7280;
+    cursor: pointer;
+    font-size: 13px;
+  }
+
+  .rp-close-btn:hover {
+    color: #111827;
+  }
+
+  @media (max-width: 768px) {
+    .rp-content {
+      grid-template-columns: 1fr;
+    }
+    .rp-btn-group {
+      flex-direction: column;
+    }
+  }
+</style>
+
+<div class="replypilot-container">
+  <div class="rp-header">
+    <div class="rp-logo">
+      <div class="rp-logo-icon">🛍️</div>
+      <div>
+        <h1 class="rp-title">ReplyPilot</h1>
+        <p class="rp-subtitle">AI-Powered Review Responses</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="rp-stats">
+    <div class="rp-stat-card">
+      <div class="rp-stat-value" id="rpResponseCount">0</div>
+      <div class="rp-stat-label">Responses Generated</div>
+    </div>
+    <div class="rp-stat-card">
+      <div class="rp-stat-value"><span id="rpTimeSaved">0</span> min</div>
+      <div class="rp-stat-label">Time Saved</div>
+    </div>
+    <div class="rp-stat-card">
+      <div class="rp-stat-value">100%</div>
+      <div class="rp-stat-label">Success Rate</div>
+    </div>
+  </div>
+
+  <div class="rp-main">
+    <div class="rp-content">
+      <!-- Left Column -->
+      <div>
+        <div class="rp-section-title">
+          <div class="rp-step-badge">1</div>
+          Enter Review Details
+        </div>
+
+        <div class="rp-form-group">
+          <label class="rp-label">Marketplace</label>
+          <div class="rp-marketplace-grid">
+            <button type="button" class="rp-marketplace-btn active-shopee" id="rpBtnShopee" onclick="rpSelectMarketplace('shopee')">
+              🛍️<br><strong>Shopee</strong>
+            </button>
+            <button type="button" class="rp-marketplace-btn" id="rpBtnLazada" onclick="rpSelectMarketplace('lazada')">
+              🛍️<br><strong>Lazada</strong>
+            </button>
+          </div>
+        </div>
+
+        <div class="rp-form-group">
+          <label class="rp-label">Star Rating</label>
+          <div class="rp-rating-grid">
+            <button type="button" class="rp-rating-btn" id="rpStar1" onclick="rpSelectRating(1)">⭐<br>1</button>
+            <button type="button" class="rp-rating-btn" id="rpStar2" onclick="rpSelectRating(2)">⭐<br>2</button>
+            <button type="button" class="rp-rating-btn" id="rpStar3" onclick="rpSelectRating(3)">⭐<br>3</button>
+            <button type="button" class="rp-rating-btn" id="rpStar4" onclick="rpSelectRating(4)">⭐<br>4</button>
+            <button type="button" class="rp-rating-btn active" id="rpStar5" onclick="rpSelectRating(5)">⭐<br>5</button>
+          </div>
+        </div>
+
+        <div class="rp-form-group">
+          <label class="rp-label">Product Name (Optional)</label>
+          <input type="text" class="rp-input" id="rpProductName" placeholder="e.g., iPhone Case, Coffee Beans">
+        </div>
+
+        <div class="rp-form-group">
+          <label for="rpLanguage" class="rp-label">Response Language</label>
+          <select id="rpLanguage" class="rp-input">
+            <option value="english">English (Free)</option>
+            <option value="tagalog">Filipino / Tagalog (Free)</option>
+            <option value="taglish">Taglish (Free)</option>
+
+            <option value="auto" disabled>🌍 Auto Detect (Pro)</option>
+            <option value="vietnamese" disabled>Vietnamese (Pro)</option>
+            <option value="thai" disabled>Thai (Pro)</option>
+            <option value="indonesian" disabled>Indonesian (Pro)</option>
+            <option value="chinese" disabled>Chinese (Pro)</option>
+          </select>
+
+          <!-- Upgrade Notice (hidden until triggered) -->
+          <div id="rpUpgradeNotice" class="rp-upgrade-notice" style="display:none;">
+            <span>🔒 This feature is available on <b>Seller Pro</b></span>
+            <button class="rp-upgrade-btn" type="button" onclick="rpShowUpgradeModal()">Upgrade now</button>
+          </div>
+        </div>
+
+        <div class="rp-form-group">
+          <label class="rp-label">Customer Review Text *</label>
+          <textarea class="rp-textarea" id="rpReviewText" placeholder="Paste the customer's review here..."></textarea>
+        </div>
+
+        <button type="button" class="rp-btn-primary" id="rpGenerateBtn" onclick="rpGenerateResponse()">
+          ✨ <span id="rpGenerateBtnText">Generate AI Response</span>
+        </button>
+      </div>
+
+      <!-- Right Column -->
+      <div>
+        <div class="rp-section-title" style="--rp-step-color: #22c55e;">
+          <div class="rp-step-badge" style="background:#22c55e;">2</div>
+          Copy & Post Response
+        </div>
+
+        <div id="rpEmptyState" class="rp-empty-state">
+          <div style="font-size: 48px; margin-bottom: 16px;">💬</div>
+          <p><strong>AI response will appear here</strong></p>
+          <p style="font-size: 14px; margin-top: 8px;">Fill in the form and click "Generate AI Response"</p>
+        </div>
+
+        <div id="rpResponseContainer" class="rp-response-box rp-hidden">
+          <div class="rp-response-header">
+            <span style="font-weight: 600; color: #9333ea;">✨ AI Generated Response</span>
+            <span class="rp-badge rp-badge-shopee" id="rpMarketplaceBadge">Shopee</span>
+          </div>
+
+          <div class="rp-response-text" id="rpAiResponse"></div>
+
+          <div class="rp-btn-group">
+            <button type="button" class="rp-btn-success" id="rpCopyBtn" onclick="rpCopyResponse()">
+              📋 <span id="rpCopyBtnText">Copy Response</span>
+            </button>
+            <button type="button" class="rp-btn-secondary" onclick="rpResetForm()">
+              New Response
+            </button>
+          </div>
+
+          <div class="rp-alert">
+            <div>ℹ️</div>
+            <div>
+              <strong>Next Steps:</strong>
+              <ol style="margin: 8px 0 0 0; padding-left: 20px;">
+                <li>Click "Copy Response" above</li>
+                <li>Go to your <span id="rpMarketplaceText">Shopee</span> Seller Center</li>
+                <li>Find the review and click "Reply"</li>
+                <li>Paste the response and submit!</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Temporary: set to "pro" if YOU want to test paid features
+  let userPlan = "free";
+
+  // Languages reserved for Pro plan
+  const rpLockedLanguages = ["auto", "vietnamese", "thai", "indonesian", "chinese"];
+
+  // === CONFIG: your backend URL on Render (NO /api here) ===
+  const BACKEND_URL = "https://replypilot-backend.onrender.com";
+
+  // ReplyPilot JavaScript - All Functions
+  let rpSelectedMarketplace = "shopee";
+  let rpSelectedRating = 5;
+  let rpResponseCount = 0;
+  let rpTimeSaved = 0;
+
+  function rpShowUpgradeModal() {
+    const modal = document.getElementById("rpUpgradeModal");
+    if (modal) modal.style.display = "flex";
+  }
+
+  function rpHideUpgradeModal() {
+    const modal = document.getElementById("rpUpgradeModal");
+    if (modal) modal.style.display = "none";
+  }
+
+  // Function that checks if a feature is allowed
+  function rpCheckLanguageAccess(language) {
+    if (userPlan === "free" && rpLockedLanguages.includes(language)) {
+      const notice = document.getElementById("rpUpgradeNotice");
+      if (notice) notice.style.display = "flex";
+      rpShowUpgradeModal();
+      return false;
+    }
+    const notice = document.getElementById("rpUpgradeNotice");
+    if (notice) notice.style.display = "none";
+    return true;
+  }
+
+  function rpSelectMarketplace(marketplace) {
+    rpSelectedMarketplace = marketplace;
+
+    const shopeeBtn = document.getElementById("rpBtnShopee");
+    const lazadaBtn = document.getElementById("rpBtnLazada");
+
+    if (!shopeeBtn || !lazadaBtn) return;
+
+    if (marketplace === "shopee") {
+      shopeeBtn.className = "rp-marketplace-btn active-shopee";
+      lazadaBtn.className = "rp-marketplace-btn";
+    } else {
+      shopeeBtn.className = "rp-marketplace-btn";
+      lazadaBtn.className = "rp-marketplace-btn active-lazada";
+    }
+  }
+
+  function rpSelectRating(rating) {
+    rpSelectedRating = rating;
+
+    for (let i = 1; i <= 5; i++) {
+      const star = document.getElementById("rpStar" + i);
+      if (!star) continue;
+      star.className = i === rating ? "rp-rating-btn active" : "rp-rating-btn";
+    }
+  }
+
+  function rpSetGenerateButtonLoading(isLoading) {
+    const btn = document.getElementById("rpGenerateBtn");
+    if (!btn) return;
+
+    btn.disabled = !!isLoading;
+    btn.innerHTML = isLoading
+      ? '<div class="rp-spinner"></div> <span>AI is writing...</span>'
+      : '✨ <span id="rpGenerateBtnText">Generate AI Response</span>';
+  }
+
+  // === Real AI call to your Render backend (Groq) ===
+  async function rpGenerateResponse() {
+    // Validate required elements exist (prevents silent failure)
+    const reviewEl = document.getElementById("rpReviewText");
+    const langEl = document.getElementById("rpLanguage");
+    const prodEl = document.getElementById("rpProductName");
+    const btnEl = document.getElementById("rpGenerateBtn");
+
+    if (!btnEl) {
+      console.error("ReplyPilot error: rpGenerateBtn not found. Check your HTML ID.");
+      return;
+    }
+    if (!reviewEl) {
+      console.error("ReplyPilot error: rpReviewText not found. Check your HTML ID.");
+      alert("Setup error: Review text box not found (rpReviewText).");
+      return;
+    }
+    if (!langEl) {
+      console.error("ReplyPilot error: rpLanguage not found. Check your HTML ID.");
+      alert("Setup error: Language dropdown not found (rpLanguage).");
+      return;
+    }
+    if (!prodEl) {
+      console.warn("ReplyPilot warning: rpProductName not found. Using default product name.");
+    }
+
+    const reviewText = (reviewEl.value || "").trim();
+    if (!reviewText) {
+      alert("Please paste a customer review first!");
+      return;
+    }
+
+    const productName = prodEl ? (prodEl.value || "your purchase") : "your purchase";
+    const language = (langEl.value || "English").trim();
+
+    // Paywall check (for Pro-only languages)
+    if (!rpCheckLanguageAccess(language)) {
+      rpSetGenerateButtonLoading(false);
+      return;
+    }
+
+    rpSetGenerateButtonLoading(true);
+    console.log("ReplyPilot: sending request ✅", { language, productName });
+    console.log("Sending:", { language, reviewText });
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/generate-reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviewText, language }),
+      });
+
+      const rawText = await response.text();
+
+      if (!response.ok) {
+        console.error("Backend error:", response.status, rawText);
+        alert("Server error (" + response.status + "). Please try again.");
+        return;
+      }
+
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (e) {
+        console.error("Bad JSON from backend:", rawText);
+        alert("Server returned an invalid response. Please try again.");
+        return;
+      }
+
+      const emptyState = document.getElementById("rpEmptyState");
+      const container = document.getElementById("rpResponseContainer");
+      const out = document.getElementById("rpAiResponse");
+
+      if (emptyState) emptyState.classList.add("rp-hidden");
+      if (container) container.classList.remove("rp-hidden");
+
+      if (out) {
+        out.textContent = data && data.reply
+          ? data.reply
+          : "Sorry, I couldn't generate a response. Please try again.";
+      }
+
+      // Marketplace badge UI (optional)
+      const badge = document.getElementById("rpMarketplaceBadge");
+      const marketplaceText = document.getElementById("rpMarketplaceText");
+
+      if (badge && marketplaceText) {
+        if (rpSelectedMarketplace === "shopee") {
+          badge.className = "rp-badge rp-badge-shopee";
+          badge.textContent = "Shopee";
+          marketplaceText.textContent = "Shopee";
+        } else {
+          badge.className = "rp-badge rp-badge-lazada";
+          badge.textContent = "Lazada";
+          marketplaceText.textContent = "Lazada";
+        }
+      }
+
+      // Stats (optional)
+      rpResponseCount++;
+      rpTimeSaved += 5;
+      const rc = document.getElementById("rpResponseCount");
+      const ts = document.getElementById("rpTimeSaved");
+      if (rc) rc.textContent = rpResponseCount;
+      if (ts) ts.textContent = rpTimeSaved;
+
+      const scrollTarget = document.getElementById("rpResponseContainer");
+      if (scrollTarget) {
+        scrollTarget.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+
+      console.log("ReplyPilot: response received ✅", data);
+    } catch (err) {
+      console.error("Network/JS error:", err);
+      alert("There was a problem contacting the AI server. Please try again.");
+    } finally {
+      rpSetGenerateButtonLoading(false);
+    }
+  }
+
+  function rpCopyResponse() {
+    const out = document.getElementById("rpAiResponse");
+    const response = out ? out.textContent : "";
+
+    navigator.clipboard.writeText(response).then(() => {
+      const btn = document.getElementById("rpCopyBtn");
+      const btnText = document.getElementById("rpCopyBtnText");
+      if (!btn || !btnText) return;
+
+      btn.style.background = "#16a34a";
+      btnText.textContent = "Copied!";
+
+      setTimeout(() => {
+        btn.style.background = "#22c55e";
+        btnText.textContent = "Copy Response";
+      }, 2000);
+    });
+  }
+
+  function rpResetForm() {
+    const review = document.getElementById("rpReviewText");
+    const product = document.getElementById("rpProductName");
+    if (review) review.value = "";
+    if (product) product.value = "";
+
+    const emptyState = document.getElementById("rpEmptyState");
+    const container = document.getElementById("rpResponseContainer");
+    if (emptyState) emptyState.classList.remove("rp-hidden");
+    if (container) container.classList.add("rp-hidden");
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // Redirect to your pricing page
+  function rpGoToPricing() {
+    window.location.href = "https://safespacecentral.com/pricing";
+  }
+
+  // IMPORTANT: Wire buttons after DOM loads
+  document.addEventListener("DOMContentLoaded", function () {
+    console.log("ReplyPilot loaded successfully ✅");
+
+    const genBtn = document.getElementById("rpGenerateBtn");
+    if (genBtn) {
+      genBtn.addEventListener("click", rpGenerateResponse);
+      console.log("ReplyPilot: Generate button wired ✅");
+    } else {
+      console.error("ReplyPilot: rpGenerateBtn not found ❌ (check your button ID)");
+    }
+
+    const copyBtn = document.getElementById("rpCopyBtn");
+    if (copyBtn) copyBtn.addEventListener("click", rpCopyResponse);
+
+    const newBtn = document.getElementById("rpNewBtn"); // only if you have it
+    if (newBtn) newBtn.addEventListener("click", rpResetForm);
+  });
+
+  // expose functions for inline onclick (if you still use them anywhere)
+  window.rpGenerateResponse = rpGenerateResponse;
+  window.rpCopyResponse = rpCopyResponse;
+  window.rpResetForm = rpResetForm;
+  window.rpSelectMarketplace = rpSelectMarketplace;
+  window.rpSelectRating = rpSelectRating;
+  window.rpGoToPricing = rpGoToPricing;
+  window.rpHideUpgradeModal = rpHideUpgradeModal;
+  window.rpShowUpgradeModal = rpShowUpgradeModal;
+</script>
+
+
+<!-- Upgrade Modal -->
+<div id="rpUpgradeModal" class="rp-modal">
+  <div class="rp-modal-box">
+    <h2>Upgrade to Seller Pro 🚀</h2>
+    <p>Unlock advanced features and reply to any customer in any language:</p>
+
+    <ul class="rp-modal-list">
+      <li>🌍 Auto-Language Detection</li>
+      <li>🇻🇳 Vietnamese Replies</li>
+      <li>🇹🇭 Thai Replies</li>
+      <li>🇮🇩 Indonesian Replies</li>
+      <li>🇨🇳 Chinese Replies</li>
+      <li>⚡ Faster AI responses</li>
+      <li>🔓 Unlimited replies</li>
+    </ul>
+
+    <button onclick="rpGoToPricing()" class="rp-upgrade-btn">
+      Upgrade to Seller Pro — ₱249/month
+    </button>
+
+    <button onclick="rpHideUpgradeModal()" class="rp-close-btn">Close</button>
+  </div>
+</div>
+<!-- /wp:html -->
+
+<!-- wp:paragraph -->
+<p class=""></p>
+<!-- /wp:paragraph -->
