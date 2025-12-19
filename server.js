@@ -27,6 +27,8 @@ app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
 // ---------- Utility: Prompts for Languages ----------
+
+// Keep your existing helper (still useful for one specific awkward phrase)
 function normalizeStrictTagalogPoliteness(text) {
   if (!text || typeof text !== "string") return text;
 
@@ -34,13 +36,13 @@ function normalizeStrictTagalogPoliteness(text) {
     {
       // Fix: "malugod naming tinatanggap kayo"
       pattern: /malugod naming tinatanggap kayo/gi,
-      replacement: "malugod po naming kayong tinatanggap"
+      replacement: "malugod po naming kayong tinatanggap",
     },
     {
       // Fix common variant without "malugod"
       pattern: /naming tinatanggap kayo/gi,
-      replacement: "po naming kayong tinatanggap"
-    }
+      replacement: "po naming kayong tinatanggap",
+    },
   ];
 
   let normalized = text;
@@ -64,15 +66,58 @@ function normalizeTaglish(text) {
     .replace(/^Salamat po sa feedback n'yo!/i, "Salamat po sa feedback n'yo!");
 }
 
-// ✅ ADDED: tiny "po" de-duper (final cleanup)
+// ✅ tiny "po" de-duper (final cleanup)
 function dedupePo(text) {
   if (!text || typeof text !== "string") return text;
 
   return text
-    // "po po" -> "po"
     .replace(/\bpo\s+po\b/gi, "po")
-    // "po po po" -> "po "
     .replace(/\b(po\s+){2,}/gi, "po ");
+}
+
+// ✅ NEW: Limit output to avoid long/essay replies
+function trimToMaxSentences(text, maxSentences = 3) {
+  if (!text || typeof text !== "string") return text;
+  const parts = text.split(/(?<=[.!?])\s+/);
+  return parts.slice(0, maxSentences).join(" ").trim();
+}
+
+// ✅ NEW: Make Filipino sound like real marketplace sellers (not formal textbook Tagalog)
+function normalizeFilipinoSellerTone(text) {
+  if (!text || typeof text !== "string") return text;
+
+  let t = text.trim();
+
+  // Remove very formal / letter-like phrases
+  t = t.replace(/\bLubos na gumagalang\b.*$/i, "").trim();
+
+  // Replace stiff words/phrases with natural marketplace phrasing
+  const replacements = [
+    [/\bpuna\b/gi, "review"],
+    [/\bkomento\b/gi, "review"],
+    [/\bikinagagalak\b/gi, "Masaya po kami"],
+    [/\bnatutuwa kami\b/gi, "Masaya po kami"],
+    [/\bnatutuwa\b/gi, "Masaya po"],
+    [/\baming tindahan\b/gi, "shop namin"],
+    [/\bmga produkto\b/gi, "products"],
+    [/\bpaghatid\b/gi, "delivery"],
+    [/\bpaghahatid\b/gi, "delivery"],
+    [/\bpagbabalik ng bayad\b/gi, "refund"],
+    [/\bkapalit\b/gi, "replacement"],
+    [/\bmalugod po naming kayong tinatanggap\b/gi, "welcome po kayo"],
+  ];
+
+  for (const [pattern, replacement] of replacements) {
+    t = t.replace(pattern, replacement);
+  }
+
+  // Prevent double "po"
+  t = dedupePo(t);
+
+  // Ensure it ends cleanly
+  if (t && !/[.!?]$/.test(t)) t += ".";
+
+  return t;
 }
 
 // ---------- Language prompts ----------
@@ -100,46 +145,34 @@ function normalizeLanguage(raw) {
 function getLanguagePrompts(language) {
   const lang = normalizeLanguage(language);
 
+  // ✅ UPDATED: Filipino prompt = natural marketplace Filipino (NOT strict Tagalog-only essay style)
   if (lang === "filipino") {
     return {
       system: `
-Ikaw ay isang AI assistant para sa mga online seller sa Pilipinas (Shopee, Lazada, atbp.).
-Ang tungkulin mo ay magsulat ng MAIKLI, MAGALANG, at NATURAL na sagot
-gamit ang **MAHIGPIT NA TAGALOG LAMANG**.
+Ikaw ay AI assistant para sa mga online seller sa Pilipinas (Shopee/Lazada).
+Gumawa ng MAIKLI, MAGALANG, at NATURAL na sagot na parang totoong seller.
 
-MAHIGPIT NA PANUNTUNAN:
-- Gumamit ng Tagalog lamang.
-- IWASAN ang mga karaniwang salitang Ingles tulad ng:
-  feedback, item, welcome, shop, order, delivery, refund, replacement, product.
-- Gamitin ang mga katumbas na salitang Tagalog:
-  - feedback → puna / komento
-  - item / product → produkto
-  - shop → tindahan
-  - welcome → malugod naming tinatanggap
-  - order → umorder / inorder
-  - delivery → hatid / paghah​atid
-  - refund → pagbabalik ng bayad
-  - replacement → kapalit
-- Pinapayagan lamang ang Ingles kung ito ay pangalan ng tatak o eksaktong modelo ng produkto.
-- Panatilihing maikli: 2–4 na pangungusap lamang.
-- Laging magpasalamat sa mamimili.
-- Kung may reklamo, magpaumanhin at mag-alok ng tulong nang magalang.
+PANUNTUNAN (Filipino):
+- Gumamit ng natural na Filipino na ginagamit sa marketplace.
+- Iwasan ang sobrang pormal o malalim na salita (hal. "puna", "naikumpara", "ikinagagalak").
+- Maiksi lang: 2–3 pangungusap.
+- Laging magpasalamat.
+- Kung may reklamo, mag-sorry at mag-alok ng tulong (replacement/refund) nang magalang.
+- Pwede ang common marketplace words kung mas natural (review, item, shop, order, delivery, refund).
+- Huwag gawing parang essay o formal letter.
       `.trim(),
 
       examples: `
-Narito ang mga halimbawa ng tamang pagsagot:
+[Preferred Filipino style – Positive]
+Review: "Ang ganda ng tuwalya at mabilis dumating."
+Reply: "Maraming salamat po sa review! Masaya po kami na nagustuhan ninyo ang tuwalya at mabilis dumating. Sana po ay makabili ulit kayo sa shop namin—salamat po! 😊"
 
-[Halimbawa 1 – Positibong Puna]
-Puna: "Ang bilis dumating at maayos ang pagkakabalot. Salamat po!"
-Sagot: "Maraming salamat po sa magandang komento! Natutuwa kami na mabilis ninyong natanggap ang produkto at maayos ang pagkakabalot. Sana po ay magustuhan ninyo ang produkto at malugod po naming kayong tinatanggap muli sa aming tindahan. 😊"
+[Preferred Filipino style – Complaint]
+Review: "May sira yung dumating."
+Reply: "Pasensya na po sa abala. Paki-message po kami para maasikaso namin agad ang replacement o refund. Salamat po sa pagpaalam. 🙏"
 
-[Halimbawa 2 – May Reklamo]
-Puna: "May sira ang produktong dumating kaya hindi ako nasiyahan."
-Sagot: "Paumanhin po kung may sira ang produktong inyong natanggap. Nais po naming ito ay agad na maitama—maaari po ba ninyo kaming kontakin upang matulungan namin kayo sa kapalit o pagbabalik ng bayad? Salamat po sa pagpapaalam."
-
-[Halimbawa 3 – Karaniwang Puna]
-Puna: "Maayos naman ang produkto, ayon sa inaasahan."
-Sagot: "Salamat po sa inyong komento! Ikinalulugod po naming natugunan ang inyong inaasahan. Inaasahan po naming muli kayong makapaglingkod sa susunod."
+[Too formal – avoid]
+"Maraming salamat sa magandang puna! Ikinagagalak namin..."
       `.trim(),
     };
   }
@@ -185,7 +218,6 @@ Rules:
 - Always thank the customer.
 - If the review is negative, politely apologize and offer help.
 - Reply only in English (do not use Tagalog/Filipino words).
-
     `.trim(),
 
     examples: `
@@ -227,6 +259,7 @@ function fallbackMessage(lang) {
   }
   return "Sorry—there was a problem generating the reply. Please try again later.";
 }
+
 // ---------- Language guard helpers ----------
 function looksLikeFilipino(text = "") {
   const t = text.toLowerCase();
@@ -241,10 +274,10 @@ function looksLikeFilipino(text = "") {
     " kami",
     " muli",
     " paghatid",
-    " paghahatid"
+    " paghahatid",
   ];
 
-  const hits = markers.filter(w => t.includes(w)).length;
+  const hits = markers.filter((w) => t.includes(w)).length;
   return hits >= 2; // threshold
 }
 
@@ -300,30 +333,37 @@ async function generateWithGroq({ reviewText, language }) {
 Customer review:
 "${reviewText}"
 
-Write a SHORT reply (2–4 sentences) following the rules above.
+Write a SHORT reply (2–3 sentences) following the rules above.
 Reply ONLY in ${lang}.
 If ${lang} is english: do not use any Filipino/Tagalog words (e.g., po, salamat, pasensya, kayo, namin, inyong).
-
         `.trim(),
       },
     ],
   });
 
-  const reply =
+  // ✅ FIXED: "reply" must be let (you reassign it during English guard)
+  let reply =
     completion.choices?.[0]?.message?.content?.trim() || fallbackMessage(lang);
-// 🔒 English guard: if English selected but output looks Filipino, rewrite once
-if (lang === "english" && looksLikeFilipino(reply)) {
-  reply = await groqRewriteToEnglish(reply, reviewText);
-}
+
+  // 🔒 English guard: if English selected but output looks Filipino, rewrite once
+  if (lang === "english" && looksLikeFilipino(reply)) {
+    reply = await groqRewriteToEnglish(reply, reviewText);
+  }
 
   let finalReply = reply;
 
   if (lang === "filipino") {
+    finalReply = trimToMaxSentences(finalReply, 3);
+    finalReply = normalizeFilipinoSellerTone(finalReply);
+    // keep your old micro-fix too (harmless)
     finalReply = normalizeStrictTagalogPoliteness(finalReply);
     finalReply = dedupePo(finalReply);
   } else if (lang === "taglish") {
+    finalReply = trimToMaxSentences(finalReply, 4);
     finalReply = normalizeTaglish(finalReply);
     finalReply = dedupePo(finalReply);
+  } else if (lang === "english") {
+    finalReply = trimToMaxSentences(finalReply, 4);
   }
 
   return {
@@ -332,7 +372,6 @@ if (lang === "english" && looksLikeFilipino(reply)) {
     model,
   };
 }
-
 
 // ---------- Core: Generate reply with OpenAI ----------
 async function generateWithOpenAI({ reviewText, language }) {
@@ -356,7 +395,7 @@ async function generateWithOpenAI({ reviewText, language }) {
 Customer review:
 "${reviewText}"
 
-Write a SHORT reply (2–4 sentences) following the rules above.
+Write a SHORT reply (2–3 sentences) following the rules above.
 Ensure the reply is written in the correct language: ${language}.
         `.trim(),
       },
@@ -364,19 +403,23 @@ Ensure the reply is written in the correct language: ${language}.
   });
 
   const reply =
-    completion.choices?.[0]?.message?.content?.trim() ||
-    "Pasensya na po, nagkaroon ng problema sa pag-generate ng sagot. Paki-try po ulit mamaya.";
+    completion.choices?.[0]?.message?.content?.trim() || fallbackMessage("filipino");
 
-  // ✅ Make OpenAI normalization language-aware + dedupe
-  const lang = (language || "").toLowerCase();
+  // ✅ Make normalization language-aware + dedupe (use normalizeLanguage for consistency)
+  const lang = normalizeLanguage(language);
   let finalReply = reply;
 
-  if (lang === "tagalog" || lang === "filipino") {
+  if (lang === "filipino") {
+    finalReply = trimToMaxSentences(finalReply, 3);
+    finalReply = normalizeFilipinoSellerTone(finalReply);
     finalReply = normalizeStrictTagalogPoliteness(finalReply);
     finalReply = dedupePo(finalReply);
   } else if (lang === "taglish") {
+    finalReply = trimToMaxSentences(finalReply, 4);
     finalReply = normalizeTaglish(finalReply);
     finalReply = dedupePo(finalReply);
+  } else if (lang === "english") {
+    finalReply = trimToMaxSentences(finalReply, 4);
   }
 
   return {
