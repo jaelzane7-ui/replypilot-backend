@@ -29,7 +29,7 @@ const OPENAI_API_KEY = cleanKey(process.env.OPENAI_API_KEY);
 
 const GROQ_MODEL = cleanEnv(process.env.GROQ_MODEL, "llama-3.1-70b-versatile");
 
-// IMPORTANT: default to gpt-4.1-mini (matches your local env & usually enabled)
+// IMPORTANT: // IMPORTANT: default to gpt-4o-mini (matches Render + local, safe fallback)
 const OPENAI_TAGLISH_MODEL = cleanEnv(process.env.OPENAI_TAGLISH_MODEL, "gpt-4o-mini");
 const OPENAI_FALLBACK_MODEL = cleanEnv(process.env.OPENAI_FALLBACK_MODEL, "gpt-4o-mini");
 
@@ -68,8 +68,14 @@ Write short, friendly, natural Taglish replies that sound human and polite.
 STRICT RULES:
 - 1–3 sentences only.
 - NEVER use placeholders like "[insert price]", "(price here)", or brackets of any kind.
-- NEVER guess prices, stock status, delivery options, or availability.
-- If the customer asks for price, stock, variant, size, location, shipping, or COD AND the information is not provided, ask ONE short clarifying question instead.
+- NEVER guess exact prices, stock numbers, delivery fees, or availability details.
+- ALWAYS assume the customer is asking about the CURRENT product listing.
+- NEVER ask “anong item?”, “saan item?”, or “ano po yung tinutukoy?”.
+- If the customer asks about price or stock and details are not shown, respond like a seller:
+  • acknowledge the inquiry
+  • confirm availability in general terms
+  • politely guide them to the listing or next step
+- Ask ONE short clarifying question ONLY if needed for variants, size, color, or quantity.
 - Use natural Taglish (mix English and Filipino naturally).
 - Use polite markers like "po" and "opo" when appropriate.
 - Avoid deep or formal Filipino words.
