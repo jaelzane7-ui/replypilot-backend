@@ -1,223 +1,190 @@
-// server.js — Hybrid Router + Fallback (Production, hardened)
+// server.js — Hybrid Router (English->Groq, Taglish->Gemini, Groq fallback)
+// OpenAI intentionally OFF for now (can be added later as fallback)
 
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-
 const Groq = require("groq-sdk");
-const OpenAI = require("openai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// ---------- Helpers ----------
-function cleanKey(v) {
-  if (!v) return "";
-  let s = String(v).trim();
-  // If someone pasted "Bearer sk-..." into Render, fix it:
-  if (s.toLowerCase().startsWith("bearer ")) s = s.slice(7).trim();
-  return s;
-}
-
-function cleanEnv(v, fallback = "") {
-  return (v ? String(v).trim() : fallback);
-}
-
-// ---------- ENV (cleaned) ----------
+// ---------- ENV Clean-up ----------
+const cleanKey = (v) => (v ? String(v).trim().replace(/^bearer\s+/i, "") : "");
 const GROQ_API_KEY = cleanKey(process.env.GROQ_API_KEY);
-const OPENAI_API_KEY = cleanKey(process.env.OPENAI_API_KEY);
+const GEMINI_API_KEY = cleanKey(process.env.GEMINI_API_KEY);
 
-const GROQ_MODEL = cleanEnv(process.env.GROQ_MODEL, "llama-3.1-70b-versatile");
-
-// IMPORTANT: // IMPORTANT: default to gpt-4o-mini (matches Render + local, safe fallback)
-const OPENAI_TAGLISH_MODEL = cleanEnv(process.env.OPENAI_TAGLISH_MODEL, "gpt-4o-mini");
-const OPENAI_FALLBACK_MODEL = cleanEnv(process.env.OPENAI_FALLBACK_MODEL, "gpt-4o-mini");
-
-// ---------- Clients ----------
-const groq = new Groq({ apiKey: GROQ_API_KEY });
-const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+// ---------- AI Clients ----------
+const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
+const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
 // ---------- Middleware ----------
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
-// ---------- Utilities ----------
-function looksLikeBadTaglish(text = "") {
-  const englishWords =
-    (text.match(/\b(the|and|is|are|with|for|this|that)\b/gi) || []).length;
-  const filipinoWords =
-    (text.match(/\b(po|opo|salamat|sige|pwede|na|pa)\b/gi) || []).length;
+// In-memory usage tracker (resets on restart; ok for testing)
+const usageTracker = {};
 
-  return englishWords > 6 && filipinoWords < 2;
+// ---------- Helpers ----------
+function normalizeTone(tone) {
+  const t = String(tone || "").toLowerCase();
+  if (["friendly", "professional", "apology", "cheerful"].includes(t)) return t;
+  return "friendly";
+}
+function normalizeRating(rating) {
+  const r = Number(rating);
+  if (Number.isFinite(r) && r >= 1 && r <= 5) return r;
+  return 5;
+}
+function normalizeLanguage(language, reviewText) {
+  // language can be "english", "taglish", "auto"
+  const l = String(language || "auto").toLowerCase().trim();
+  if (l === "english" || l === "taglish" || l === "auto") return l;
+
+  // fallback: detect if language param is missing/unknown
+  return detectLanguage(reviewText);
+}
+function detectLanguage(text) {
+  const t = String(text || "").toLowerCase();
+  const tagalogMarkers = [
+    "po", "opo", "salamat", "sana", "mabilis", "ang", "ng", "naman", "daw", "kasi",
+    "okay", "ok", "paki", "magkano", "meron", "wala", "pa", "na", "din", "rin"
+  ];
+  const hits = tagalogMarkers.filter((w) => new RegExp(`\\b${w}\\b`, "i").test(t)).length;
+  return hits >= 2 ? "taglish" : "english";
 }
 
-// ---------- OpenAI Taglish Generator ----------
-async function generateTaglishWithOpenAI(reviewText) {
-  const completion = await openai.chat.completions.create({
-    model: OPENAI_TAGLISH_MODEL,
-    temperature: 0.4,
-    max_tokens: 220,
-    messages: [
-      {
-        role: "system",
-        content: `
-You are ReplyPilot, a helpful seller assistant for Philippine online marketplaces such as Shopee, Lazada, and Facebook Marketplace.
+function buildRules({ rating, tone, language }) {
+  // Strict rules to prevent hallucination/placeholder issues
+  return `
+You are ReplyPilot, a seller assistant for Shopee/Lazada/FB Marketplace.
 
-Write short, friendly, natural Taglish replies that sound human and polite.
+Write a short reply to a ${rating}-star review. Tone: ${tone}.
+Language: ${language}.
 
 STRICT RULES:
 - 1–3 sentences only.
-- NEVER use placeholders like "[insert price]", "(price here)", or brackets of any kind.
-- NEVER guess exact prices, stock numbers, delivery fees, or availability details.
-- ALWAYS assume the customer is asking about the CURRENT product listing.
-- NEVER ask “anong item?”, “saan item?”, or “ano po yung tinutukoy?”.
-- If the customer asks about price or stock and details are not shown:
-  • respond confidently as a seller
-  • confirm availability in general terms
-  • guide the customer to the listing or next step
-- Ask ONE short clarifying question ONLY if needed for variant, size, color, or quantity.
-- Avoid overly formal phrases like "Salamat po sa inquiry".
-- Prefer casual seller openings like "Yes po", "Hello po", or "Available pa po".
-- Use natural Taglish (mix English and Filipino naturally).
-- Use polite markers like "po" and "opo" when appropriate.
-- Avoid deep or formal Filipino words.
-- Avoid generic English closers like "Feel free to check it out"; prefer Filipino seller closers like "message lang po kayo", "pwede po kayong mag-order", or "sabihin lang po kung may tanong".
-- Do NOT sound robotic or translated.
-- No emojis.
-- No hashtags.
-- Do not mention AI, policies, or internal steps.
-
-Output ONLY the seller reply text.
-        `.trim(),
-      },
-      {
-        role: "user",
-        content: `
-Customer message:
-"${reviewText}"
-
-Write the best seller reply.
-        `.trim(),
-      },
-    ],
-  });
-
-  return completion.choices?.[0]?.message?.content?.trim() || "";
+- NEVER use placeholders like "[...]", "(...)", "{...}" or angle brackets.
+- NEVER guess price, stock, shipping, COD, location, variants, or delivery time.
+- If the review asks about price/stock/shipping/COD/location/variants and info is missing: ask ONE short clarifying question instead.
+- Be polite and human. Use "po/opo" naturally if Taglish.
+`.trim();
 }
 
-// ---------- Groq English Generator ----------
-async function generateEnglishWithGroq(reviewText) {
+// ---------- AI Functions ----------
+async function generateWithGemini({ reviewText, rating, tone }) {
+  if (!genAI) throw new Error("Gemini API Key Missing");
+
+  // Gemini model name can change; "gemini-2.0-flash" is what you set
+  const model = genAI.getGenerativeModel({
+    model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+    systemInstruction: buildRules({ rating, tone, language: "taglish" }),
+  });
+
+  const result = await model.generateContent(String(reviewText));
+  const text = result?.response?.text?.() || "";
+  return String(text).trim();
+}
+
+async function generateWithGroq({ reviewText, rating, tone, language }) {
+  if (!groq) throw new Error("Groq API Key Missing");
+
+  const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+  const system = buildRules({ rating, tone, language });
+
   const completion = await groq.chat.completions.create({
-    model: GROQ_MODEL,
+    model,
     temperature: 0.4,
     max_tokens: 220,
     messages: [
-      {
-        role: "system",
-        content: `
-You are ReplyPilot, an AI assistant that writes clear, friendly, professional English replies for online sellers.
-Keep replies short (2–4 sentences), polite, and helpful.
-        `.trim(),
-      },
-      {
-        role: "user",
-        content: `
-Customer review:
-"${reviewText}"
-
-Write a seller reply.
-        `.trim(),
-      },
+      { role: "system", content: system },
+      { role: "user", content: String(reviewText) },
     ],
   });
 
-  return completion.choices?.[0]?.message?.content?.trim() || "";
+  return completion?.choices?.[0]?.message?.content?.trim() || "";
 }
 
-// ---------- OpenAI Fallback Cleaner ----------
-async function cleanWithOpenAI(rawText) {
-  const completion = await openai.chat.completions.create({
-    model: OPENAI_FALLBACK_MODEL,
-    temperature: 0.3,
-    max_tokens: 220,
-    messages: [
-      {
-        role: "system",
-        content: `
-You are a language refiner.
-Clean and fix the reply below so it becomes natural Taglish suitable for a Filipino online seller.
-Do not add new information.
-Output ONLY the cleaned reply text.
-        `.trim(),
-      },
-      { role: "user", content: rawText },
-    ],
+// ---------- Status Route ----------
+app.get("/status", (req, res) => {
+  res.json({
+    status: "ok",
+    groqConfigured: !!groq,
+    geminiConfigured: !!genAI,
+    groqModel: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+    geminiModel: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+    port: String(PORT),
   });
+});
 
-  return completion.choices?.[0]?.message?.content?.trim() || rawText;
-}
-
-// ---------- API ----------
+// ---------- Main API Route ----------
 app.post("/api/generate-reply", async (req, res) => {
   try {
-    const { reviewText, language } = req.body;
+    const {
+      reviewText,
+      rating,
+      tone,
+      language = "auto",     // "english" | "taglish" | "auto"
+      platform = "shopee",   // optional
+      userId = "user_v18_launch",
+    } = req.body || {};
 
-    if (!reviewText) {
-      return res.status(400).json({ error: "Missing reviewText" });
-    }
+    const text = String(reviewText || "").trim();
+    if (!text) return res.status(400).json({ error: "BAD_REQUEST", details: "reviewText is required" });
 
-    const lang = (language || "").toLowerCase().trim();
+    const safeTone = normalizeTone(tone);
+    const safeRating = normalizeRating(rating);
+    const lang = normalizeLanguage(language, text);
 
-    // Router: Taglish/Filipino/Tagalog => OpenAI direct
-    if (lang === "taglish" || lang === "filipino" || lang === "tagalog") {
-      if (!OPENAI_API_KEY) {
-        return res.status(500).json({ error: "OpenAI key not configured on server." });
+    // usage limit (testing)
+    if (!usageTracker[userId]) usageTracker[userId] = 0;
+    if (usageTracker[userId] >= 100) return res.status(403).json({ error: "LIMIT_REACHED" });
+
+    let reply = "";
+    let engine = "";
+
+    // Routing:
+    // - Taglish -> Gemini primary, Groq fallback
+    // - English -> Groq primary (no need to hit Gemini)
+    if (lang === "taglish") {
+      try {
+        reply = await generateWithGemini({ reviewText: text, rating: safeRating, tone: safeTone });
+        engine = "gemini-primary";
+      } catch (gemErr) {
+        console.log("Gemini failed, switching to Groq fallback:", gemErr?.message || gemErr);
+        reply = await generateWithGroq({ reviewText: text, rating: safeRating, tone: safeTone, language: "taglish" });
+        engine = "groq-fallback";
       }
-      const reply = await generateTaglishWithOpenAI(reviewText);
-      return res.json({ reply, engine: "openai-direct" });
+    } else {
+      // english
+      reply = await generateWithGroq({ reviewText: text, rating: safeRating, tone: safeTone, language: "english" });
+      engine = "groq-primary";
     }
 
-    // English path => Groq
-    if (!GROQ_API_KEY) {
-      return res.status(500).json({ error: "Groq key not configured on server." });
+    usageTracker[userId]++;
+
+    // final safety: ensure reply is not empty
+    if (!reply) {
+      return res.status(500).json({ error: "AI_ERROR", details: "Empty reply from engine", engine });
     }
 
-    let reply = await generateEnglishWithGroq(reviewText);
-
-    // Fallback cleanup if output looks wrong
-    if (looksLikeBadTaglish(reply) && OPENAI_API_KEY) {
-      const cleaned = await cleanWithOpenAI(reply);
-      return res.json({ reply: cleaned, engine: "groq+openai-fallback" });
-    }
-
-    return res.json({ reply, engine: "groq" });
-  } catch (err) {
-    // Helpful server-side log (no secrets)
-    console.error("Generate error:", {
-      message: err?.message,
-      name: err?.name,
-      status: err?.status,
-      code: err?.code,
-      type: err?.type,
+    res.json({
+      reply,
+      engine,
+      language: lang,
+      platform,
+      usageCount: usageTracker[userId],
     });
-    res.status(500).json({ error: "Failed to generate reply" });
+  } catch (err) {
+    res.status(500).json({ error: "SERVER_ERROR", details: err.message });
   }
 });
 
-// ---------- Health ----------
-app.get("/health", (req, res) => {
-  res.json({
-    status: "ok",
-    port: PORT,
-    groqConfigured: !!GROQ_API_KEY,
-    openaiConfigured: !!OPENAI_API_KEY,
-    groqModel: GROQ_MODEL,
-    openaiTaglishModel: OPENAI_TAGLISH_MODEL,
-    openaiFallbackModel: OPENAI_FALLBACK_MODEL,
-  });
-});
-
-// ---------- Start ----------
 app.listen(PORT, () => {
-  console.log(`ReplyPilot backend running on port ${PORT}`);
+  console.log(`🚀 ReplyPilot Backend LIVE (Hybrid Router)
+- Local: http://localhost:${PORT}
+- English -> Groq
+- Taglish -> Gemini (fallback Groq)
+`);
 });
