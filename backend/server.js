@@ -1,449 +1,148 @@
-// server.js - v0.8 Hybrid (Groq + Optional OpenAI)
-
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-
-// ----- Groq Client -----
 const Groq = require("groq-sdk");
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
-
-// ----- OpenAI Client (optional) -----
-let openai = null;
-if (process.env.OPENAI_API_KEY) {
-  const OpenAI = require("openai");
-  openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
-}
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 10000;
 
-// ---------- Middleware ----------
+// ---------- ENV Clean ----------
+const cleanKey = (v) => (v ? String(v).trim().replace(/^bearer\s+/i, "") : "");
+const GROQ_API_KEY = cleanKey(process.env.GROQ_API_KEY);
+const GEMINI_API_KEY = cleanKey(process.env.GEMINI_API_KEY);
+
+const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
+const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
+
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
-// ---------- Utility: Prompts for Languages ----------
-function normalizeStrictTagalogPoliteness(text) {
-  if (!text || typeof text !== "string") return text;
+const usageTracker = {};
 
-  const replacements = [
-    {
-      // Fix: "malugod naming tinatanggap kayo"
-      pattern: /malugod naming tinatanggap kayo/gi,
-      replacement: "malugod po naming kayong tinatanggap"
-    },
-    {
-      // Fix common variant without "malugod"
-      pattern: /naming tinatanggap kayo/gi,
-      replacement: "po naming kayong tinatanggap"
-    }
-  ];
+// ---------------- Helpers ----------------
+const clean = (v) => (v ?? "").toString().trim();
 
-  let normalized = text;
-  for (const r of replacements) {
-    normalized = normalized.replace(r.pattern, r.replacement);
-  }
-
-  return normalized;
+function detectLanguage(text) {
+  const t = text.toLowerCase();
+  const markers = ["salamat","po","opo","mabilis","sana","ang","ng","kasi","meron","wala"];
+  const hits = markers.filter(w => new RegExp(`\\b${w}\\b`).test(t)).length;
+  return hits >= 2 ? "taglish" : "english";
 }
 
-function normalizeTaglish(text) {
-  if (!text || typeof text !== "string") return text;
-
-  return text
-    // Fix awkward literal Tagalog
-    .replace(/pagkuha ng oras na magbigay ng puna/gi, "feedback n'yo")
-    .replace(/pagbigay ng inyong pagbalik/gi, "feedback n'yo")
-    .replace(/pagbigay ng inyong komento/gi, "comment n'yo")
-    // Normalize opening
-    .replace(/^Salamat\s+/i, "Salamat po ")
-    .replace(/^Salamat po sa feedback n'yo!/i, "Salamat po sa feedback n'yo!");
+function normalizeLanguage(language, text) {
+  const l = (language || "auto").toLowerCase();
+  if (l === "english" || l === "taglish") return l;
+  return detectLanguage(text);
 }
 
-// ✅ ADDED: tiny "po" de-duper (final cleanup)
-function dedupePo(text) {
-  if (!text || typeof text !== "string") return text;
-
-  return text
-    // "po po" -> "po"
-    .replace(/\bpo\s+po\b/gi, "po")
-    // "po po po" -> "po "
-    .replace(/\b(po\s+){2,}/gi, "po ");
-}
-
-// ---------- Language prompts ----------
-function normalizeLanguage(raw) {
-  const v = String(raw || "").trim().toLowerCase();
-
-  const map = {
-    en: "english",
-    eng: "english",
-    english: "english",
-
-    tl: "filipino",
-    fil: "filipino",
-    filipino: "filipino",
-    tagalog: "filipino",
-
-    taglish: "taglish",
-
-    auto: "auto",
-  };
-
-  return map[v] || "english";
-}
-
-function getLanguagePrompts(language) {
-  const lang = normalizeLanguage(language);
-
-  if (lang === "filipino") {
-    return {
-      system: `
-Ikaw ay isang AI assistant para sa mga online seller sa Pilipinas (Shopee, Lazada, atbp.).
-Ang tungkulin mo ay magsulat ng MAIKLI, MAGALANG, at NATURAL na sagot
-gamit ang **MAHIGPIT NA TAGALOG LAMANG**.
-
-MAHIGPIT NA PANUNTUNAN:
-- Gumamit ng Tagalog lamang.
-- IWASAN ang mga karaniwang salitang Ingles tulad ng:
-  feedback, item, welcome, shop, order, delivery, refund, replacement, product.
-- Gamitin ang mga katumbas na salitang Tagalog:
-  - feedback → puna / komento
-  - item / product → produkto
-  - shop → tindahan
-  - welcome → malugod naming tinatanggap
-  - order → umorder / inorder
-  - delivery → hatid / paghah​atid
-  - refund → pagbabalik ng bayad
-  - replacement → kapalit
-- Pinapayagan lamang ang Ingles kung ito ay pangalan ng tatak o eksaktong modelo ng produkto.
-- Panatilihing maikli: 2–4 na pangungusap lamang.
-- Laging magpasalamat sa mamimili.
-- Kung may reklamo, magpaumanhin at mag-alok ng tulong nang magalang.
-      `.trim(),
-
-      examples: `
-Narito ang mga halimbawa ng tamang pagsagot:
-
-[Halimbawa 1 – Positibong Puna]
-Puna: "Ang bilis dumating at maayos ang pagkakabalot. Salamat po!"
-Sagot: "Maraming salamat po sa magandang komento! Natutuwa kami na mabilis ninyong natanggap ang produkto at maayos ang pagkakabalot. Sana po ay magustuhan ninyo ang produkto at malugod po naming kayong tinatanggap muli sa aming tindahan. 😊"
-
-[Halimbawa 2 – May Reklamo]
-Puna: "May sira ang produktong dumating kaya hindi ako nasiyahan."
-Sagot: "Paumanhin po kung may sira ang produktong inyong natanggap. Nais po naming ito ay agad na maitama—maaari po ba ninyo kaming kontakin upang matulungan namin kayo sa kapalit o pagbabalik ng bayad? Salamat po sa pagpapaalam."
-
-[Halimbawa 3 – Karaniwang Puna]
-Puna: "Maayos naman ang produkto, ayon sa inaasahan."
-Sagot: "Salamat po sa inyong komento! Ikinalulugod po naming natugunan ang inyong inaasahan. Inaasahan po naming muli kayong makapaglingkod sa susunod."
-      `.trim(),
-    };
-  }
-
-  if (lang === "taglish") {
-    return {
-      system: `
-Ikaw ay AI assistant para sa online seller. Gumamit ng Taglish: halo ng Tagalog at English,
-pero natural at pang-araw-araw na pananalita sa Pilipinas.
-
-PANUNTUNAN:
-- Gumamit ng natural na Taglish, gaya ng karaniwang sagot ng online sellers sa Pilipinas.
-- Ang unang pangungusap ay dapat natural at conversational, tulad ng:
-  "Salamat po sa feedback n'yo!"
-  "Thanks po sa comment n'yo!"
-  "Salamat po sa message n'yo!"
-- Iwasan ang masyadong pormal o literal na Tagalog gaya ng:
-  "pagkuha ng oras na magbigay ng puna"
-- Huwag gumamit ng malalim o literal na Tagalog na parang salin-wika.
-- Iwasan ang awkward na parirala gaya ng "pagbigay ng inyong pagbalik".
-- Panatilihing maikli: 2–4 pangungusap.
-- Kung may reklamo (late delivery), mag-sorry, mag-explain lightly, at mag-assure ng improvement.
-      `.trim(),
-
-      examples: `
-[Halimbawa – Late delivery]
-Review: "Okay yung item pero medyo late dumating."
-Reply: "Salamat po sa feedback n'yo! Pasensya na po kung na-delay ang dating ng parcel—minsan po may aberya sa courier. Gagawin po namin ang best namin para mas mabilis sa susunod. 😊"
-      `.trim(),
-    };
-  }
-
-  // Default: English
-  return {
-    system: `
-You are a helpful AI assistant for online sellers.
-Your job is to write SHORT, polite, and friendly customer-service replies
-to reviews in clear, conversational English.
+function buildRules({ rating, tone, language }) {
+  return `
+You are ReplyPilot, a Shopee/Lazada seller assistant.
+Reply to a ${rating}-star review.
+Tone: ${tone}
+Language: ${language}
 
 Rules:
-- Be brief: 2–4 sentences only.
-- Keep the total length under 45 words.
-- Always thank the customer.
-- If the review is negative, politely apologize and offer help.
-- Reply only in English (do not use Tagalog/Filipino words).
-
-    `.trim(),
-
-    examples: `
-Examples:
-
-[Example 1 – Positive]
-Review: "Item arrived quickly and was well packed."
-Reply: "Thank you so much for your positive feedback! We're glad to hear your order arrived quickly and in good condition. We appreciate your support and hope to serve you again soon. 😊"
-
-[Example 2 – Negative]
-Review: "The product was damaged when it arrived."
-Reply: "We're very sorry to hear that your item arrived damaged. Please send us a message so we can help arrange a replacement or refund for you as soon as possible. Thank you for letting us know."
-
-[Example 3 – Neutral]
-Review: "The product is okay, nothing special."
-Reply: "Thank you for taking the time to share your feedback. We appreciate your honesty and will use your comments to keep improving our products and service. 😊"
-    `.trim(),
-  };
+- 1–3 sentences only
+- No prices, stock, shipping, COD, location
+- Be polite, natural, Taglish if Filipino
+`.trim();
 }
 
-// ---------- Utility: choose which provider to use ----------
-function shouldUseOpenAI(language) {
-  if (!openai) return false; // no key, can't use OpenAI
-  const lang = normalizeLanguage(language);
+function buildPrompt({ reviewText, productName, platform }) {
+  return `
+Platform: ${platform}
+${productName ? `Product: ${productName}` : ""}
 
-  // Hybrid logic: prefer OpenAI for Filipino/Taglish if available
-  if (lang === "filipino" || lang === "taglish") return true;
-
-  // English & others → keep using Groq for now
-  return false;
-}
-
-function fallbackMessage(lang) {
-  if (lang === "filipino") {
-    return "Pasensya na po, nagkaroon ng problema sa pag-generate ng sagot. Paki-try po ulit mamaya.";
-  }
-  if (lang === "taglish") {
-    return "Sorry po—nagka-problem sa pag-generate ng reply. Please try again later.";
-  }
-  return "Sorry—there was a problem generating the reply. Please try again later.";
-}
-// ---------- Language guard helpers ----------
-function looksLikeFilipino(text = "") {
-  const t = text.toLowerCase();
-  const markers = [
-    " po",
-    " salamat",
-    " pasensya",
-    " paumanhin",
-    " namin",
-    " inyong",
-    " kayo",
-    " kami",
-    " muli",
-    " paghatid",
-    " paghahatid"
-  ];
-
-  const hits = markers.filter(w => t.includes(w)).length;
-  return hits >= 2; // threshold
-}
-
-async function groqRewriteToEnglish(originalReply, reviewText) {
-  const model = process.env.GROQ_MODEL || "llama-3.1-70b-versatile";
-
-  const completion = await groq.chat.completions.create({
-    model,
-    temperature: 0.2,
-    max_tokens: 220,
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are a strict rewriter. Output English ONLY. Keep it short (2–4 sentences), polite, and professional.",
-      },
-      {
-        role: "user",
-        content: `
 Customer review:
 "${reviewText}"
 
-Rewrite the reply below into English ONLY.
-Do not include any Filipino/Tagalog words.
-
-Reply to rewrite:
-"${originalReply}"
-        `.trim(),
-      },
-    ],
-  });
-
-  return completion.choices?.[0]?.message?.content?.trim() || originalReply;
+Write a natural seller reply.
+`.trim();
 }
 
-// ---------- Core: Generate reply with Groq ----------
-async function generateWithGroq({ reviewText, language }) {
-  const lang = normalizeLanguage(language);
-  const { system, examples } = getLanguagePrompts(lang);
+function polish(text, lang) {
+  let s = text
+    .replace(/\brecieve\b/gi,"receive")
+    .replace(/\brecieved\b/gi,"received")
+    .replace(/we appreciate your business\.?/gi,"Salamat po sa order ninyo!")
+    .replace(/hope to serve you again soon\.?/gi,"Sana po makabalik kayo ulit!");
+  if (lang === "taglish" && !/\bpo\b/i.test(s)) s += " Salamat po!";
+  return s.trim();
+}
 
-  const model = process.env.GROQ_MODEL || "llama-3.1-70b-versatile";
-
-  const completion = await groq.chat.completions.create({
-    model,
+// ---------------- AI ----------------
+async function groqReply(p) {
+  const c = await groq.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
     temperature: 0.4,
-    max_tokens: 220,
+    max_tokens: 200,
     messages: [
-      { role: "system", content: system },
-      { role: "system", content: examples },
-      {
-        role: "user",
-        content: `
-Customer review:
-"${reviewText}"
-
-Write a SHORT reply (2–4 sentences) following the rules above.
-Reply ONLY in ${lang}.
-If ${lang} is english: do not use any Filipino/Tagalog words (e.g., po, salamat, pasensya, kayo, namin, inyong).
-
-        `.trim(),
-      },
+      { role: "system", content: buildRules(p) },
+      { role: "user", content: buildPrompt(p) },
     ],
   });
-
-  const reply =
-    completion.choices?.[0]?.message?.content?.trim() || fallbackMessage(lang);
-// 🔒 English guard: if English selected but output looks Filipino, rewrite once
-if (lang === "english" && looksLikeFilipino(reply)) {
-  reply = await groqRewriteToEnglish(reply, reviewText);
+  return c.choices[0].message.content;
 }
 
-  let finalReply = reply;
-
-  if (lang === "filipino") {
-    finalReply = normalizeStrictTagalogPoliteness(finalReply);
-    finalReply = dedupePo(finalReply);
-  } else if (lang === "taglish") {
-    finalReply = normalizeTaglish(finalReply);
-    finalReply = dedupePo(finalReply);
-  }
-
-  return {
-    reply: finalReply,
-    provider: "groq",
-    model,
-  };
-}
-
-
-// ---------- Core: Generate reply with OpenAI ----------
-async function generateWithOpenAI({ reviewText, language }) {
-  if (!openai) {
-    throw new Error("OpenAI client not initialized");
-  }
-
-  const { system, examples } = getLanguagePrompts(language);
-  const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";
-
-  const completion = await openai.chat.completions.create({
-    model,
-    temperature: 0.4,
-    max_tokens: 220,
-    messages: [
-      { role: "system", content: system },
-      { role: "system", content: examples },
-      {
-        role: "user",
-        content: `
-Customer review:
-"${reviewText}"
-
-Write a SHORT reply (2–4 sentences) following the rules above.
-Ensure the reply is written in the correct language: ${language}.
-        `.trim(),
-      },
-    ],
+async function geminiReply(p) {
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.0-flash",
+    systemInstruction: buildRules({ ...p, language: "taglish" }),
   });
-
-  const reply =
-    completion.choices?.[0]?.message?.content?.trim() ||
-    "Pasensya na po, nagkaroon ng problema sa pag-generate ng sagot. Paki-try po ulit mamaya.";
-
-  // ✅ Make OpenAI normalization language-aware + dedupe
-  const lang = (language || "").toLowerCase();
-  let finalReply = reply;
-
-  if (lang === "tagalog" || lang === "filipino") {
-    finalReply = normalizeStrictTagalogPoliteness(finalReply);
-    finalReply = dedupePo(finalReply);
-  } else if (lang === "taglish") {
-    finalReply = normalizeTaglish(finalReply);
-    finalReply = dedupePo(finalReply);
-  }
-
-  return {
-    reply: finalReply,
-    provider: "openai",
-    model,
-  };
+  const r = await model.generateContent(buildPrompt(p));
+  return r.response.text();
 }
 
-// ---------- Route: Health check ----------
-app.get("/health", (req, res) => {
-  res.json({
-    status: "ok",
-    groq: !!process.env.GROQ_API_KEY,
-    openaiConfigured: !!process.env.OPENAI_API_KEY,
-    port: PORT,
-  });
-});
+// ---------------- Routes ----------------
+app.get("/", (req,res)=>res.send("ReplyPilot backend running"));
+app.get("/status",(req,res)=>res.json({
+  status:"ok",
+  groq:!!groq,
+  gemini:!!genAI
+}));
 
-// ---------- Route: Generate Reply ----------
-app.post("/api/generate-reply", async (req, res) => {
-  try {
-    const { reviewText, language } = req.body;
+app.post("/api/generate-reply", async (req,res)=>{
+  try{
+    const text = clean(req.body.reviewText);
+    if(!text) return res.status(400).json({error:"reviewText required"});
 
-    if (!reviewText || typeof reviewText !== "string") {
-      return res.status(400).json({
-        success: false,
-        error: "Missing or invalid 'reviewText' in request body.",
-      });
-    }
+    const lang = normalizeLanguage(req.body.language, text);
+    const data = {
+      reviewText:text,
+      productName:clean(req.body.productName),
+      platform:req.body.platform || "shopee",
+      rating:req.body.rating || 5,
+      tone:req.body.tone || "friendly",
+      language:lang
+    };
 
-    const lang = language || "english";
+    let reply;
+    let engine;
 
-    let result;
-    // Decide provider
-    if (shouldUseOpenAI(lang)) {
-      // Try OpenAI first, fall back to Groq if something breaks
-      try {
-        result = await generateWithOpenAI({ reviewText, language: lang });
-      } catch (err) {
-        console.error("[OpenAI error, falling back to Groq]", err.message);
-        result = await generateWithGroq({ reviewText, language: lang });
+    if(lang==="taglish"){
+      try{
+        reply = await geminiReply(data);
+        engine="gemini";
+      }catch{
+        reply = await groqReply(data);
+        engine="groq-fallback";
       }
-    } else {
-      // Groq-first
-      result = await generateWithGroq({ reviewText, language: lang });
+    }else{
+      reply = await groqReply(data);
+      engine="groq";
     }
 
     res.json({
-      success: true,
-      reply: result.reply,
-      providerUsed: result.provider,
-      modelUsed: result.model,
-      language: lang,
+      reply: polish(reply, lang),
+      engine,
+      language: lang
     });
-  } catch (error) {
-    console.error("[/api/generate-reply] Error:", error);
 
-    res.status(500).json({
-      success: false,
-      error: "Failed to generate reply. Please try again later.",
-      details: process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
+  }catch(e){
+    res.status(500).json({error:e.message});
   }
 });
 
-// ---------- Start server ----------
-app.listen(PORT, () => {
-  console.log(`ReplyPilot backend v0.8 running on port ${PORT}`);
-});
+app.listen(PORT, ()=>console.log("ReplyPilot backend live on",PORT));
