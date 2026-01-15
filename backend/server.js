@@ -74,6 +74,8 @@ function polish(text, lang) {
 
 // ---------------- AI ----------------
 async function groqReply(p) {
+  if (!groq) throw new Error("Groq not configured (missing GROQ_API_KEY)");
+
   const c = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile",
     temperature: 0.4,
@@ -83,17 +85,20 @@ async function groqReply(p) {
       { role: "user", content: buildPrompt(p) },
     ],
   });
-  return c.choices[0].message.content;
+
+  return c?.choices?.[0]?.message?.content?.trim() || "";
 }
 
 async function geminiReply(p) {
+  if (!genAI) throw new Error("Gemini not configured (missing GEMINI_API_KEY)");
   const model = genAI.getGenerativeModel({
     model: "gemini-2.0-flash",
     systemInstruction: buildRules({ ...p, language: "taglish" }),
   });
   const r = await model.generateContent(buildPrompt(p));
-  return r.response.text();
+  return (r?.response?.text?.() || "").trim();
 }
+
 
 // ---------------- Routes ----------------
 app.get("/", (req,res)=>res.send("ReplyPilot backend running"));
@@ -153,4 +158,5 @@ app.get("/__whoami", (req, res) => {
 });
 
 app.listen(PORT, ()=>console.log("ReplyPilot backend live on",PORT));
+
 
