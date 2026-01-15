@@ -144,5 +144,13 @@ app.post("/api/generate-reply", async (req,res)=>{
     res.status(500).json({error:e.message});
   }
 });
+app.get("/__whoami", (req, res) => {
+  res.json({
+    ok: true,
+    file: "backend/server.js",
+    stamp: "v0.9-statusfix-20260116",
+  });
+});
 
 app.listen(PORT, ()=>console.log("ReplyPilot backend live on",PORT));
+
