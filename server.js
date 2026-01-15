@@ -40,13 +40,12 @@ function normalizeRating(rating) {
 }
 
 function normalizeLanguage(language, reviewText) {
-  // language can be "english", "taglish", "auto"
   const l = String(language || "auto").toLowerCase().trim();
-  if (l === "english" || l === "taglish" || l === "auto") return l;
-
-  // fallback: detect if language param is missing/unknown
+  if (l === "english" || l === "taglish") return l;
+  if (l === "auto") return detectLanguage(reviewText);
   return detectLanguage(reviewText);
 }
+
 
 function detectLanguage(text) {
   const t = String(text || "").toLowerCase();
