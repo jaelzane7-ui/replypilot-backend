@@ -108,7 +108,7 @@ async function groqReply(p) {
 async function geminiReply(p) {
   if (!genAI) throw new Error("GEMINI_NOT_CONFIGURED");
 
-  const modelName = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+  const modelName = process.env.GEMINI_MODEL || "gemini-1.5-flash",
   const model = genAI.getGenerativeModel({ model: modelName });
 
   // IMPORTANT: rules are embedded in the prompt (no systemInstruction)
@@ -220,6 +220,7 @@ Customer review:
 
 
 app.listen(PORT, () => console.log("ReplyPilot backend live on", PORT));
+
 
 
 
