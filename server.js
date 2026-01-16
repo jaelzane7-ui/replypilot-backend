@@ -1,5 +1,5 @@
 // server.js — Hybrid Router (English->Groq, Taglish->Gemini, Groq fallback)
-// OpenAI intentionally OFF for now (can be added later as fallback cleaner)
+// OpenAI intentionally OFF for now (can be added later as fallback)
 
 require("dotenv").config();
 const express = require("express");
@@ -28,71 +28,35 @@ const usageTracker = {};
 
 // ---------- Helpers ----------
 function normalizeTone(tone) {
-  const t = String(tone || "").toLowerCase().trim();
+  const t = String(tone || "").toLowerCase();
   if (["friendly", "professional", "apology", "cheerful"].includes(t)) return t;
   return "friendly";
 }
-
 function normalizeRating(rating) {
   const r = Number(rating);
   if (Number.isFinite(r) && r >= 1 && r <= 5) return r;
   return 5;
 }
-
 function normalizeLanguage(language, reviewText) {
+  // language can be "english", "taglish", "auto"
   const l = String(language || "auto").toLowerCase().trim();
-  if (l === "english" || l === "taglish") return l;
-  if (l === "auto") return detectLanguage(reviewText);
+  if (l === "english" || l === "taglish" || l === "auto") return l;
+
+  // fallback: detect if language param is missing/unknown
   return detectLanguage(reviewText);
 }
-
-
 function detectLanguage(text) {
   const t = String(text || "").toLowerCase();
   const tagalogMarkers = [
-    "po",
-    "opo",
-    "salamat",
-    "sana",
-    "mabilis",
-    "ang",
-    "ng",
-    "naman",
-    "daw",
-    "kasi",
-    "okay",
-    "ok",
-    "paki",
-    "magkano",
-    "meron",
-    "wala",
-    "pa",
-    "na",
-    "din",
-    "rin",
+    "po", "opo", "salamat", "sana", "mabilis", "ang", "ng", "naman", "daw", "kasi",
+    "okay", "ok", "paki", "magkano", "meron", "wala", "pa", "na", "din", "rin"
   ];
   const hits = tagalogMarkers.filter((w) => new RegExp(`\\b${w}\\b`, "i").test(t)).length;
   return hits >= 2 ? "taglish" : "english";
 }
 
 function buildRules({ rating, tone, language }) {
-  // Strict rules to prevent hallucination/placeholder issues
-  return `
-You are ReplyPilot, a seller assistant for Shopee/Lazada/FB Marketplace.
-
-Write a short reply to a ${rating}-star review. Tone: ${tone}.
-Language: ${language}.
-
-STRICT RULES:
-- 1–3 sentences only.
-- NEVER use placeholders like "[...]", "(...)", "{...}" or angle brackets.
-- NEVER guess price, stock, shipping, COD, location, variants, or delivery time.
-- If the review asks about price/stock/shipping/COD/location/variants and info is missing: ask ONE short clarifying question instead.
-- Be polite and human. Use "po/opo" naturally if Taglish.
-`.trim();
-}
-
-// ---------- Reply cleanup + product helpers ----------
+ // ---------- Reply cleanup + product helpers ----------
 function cleanText(v) {
   return (v ?? "").toString().trim();
 }
@@ -132,7 +96,6 @@ function ensurePoliteTaglish(s, lang) {
 
 function keepShort(s) {
   if (!s) return s;
-  // Soft trim to ~3 sentences max
   const parts = s.split(/(?<=[.!?])\s+/).filter(Boolean);
   return parts.slice(0, 3).join(" ").trim();
 }
@@ -165,46 +128,30 @@ Rules:
 - If product is provided, you MAY mention it once naturally (no extra specs).
 - NEVER add fake details (price, stock, freebies, warranty, delivery date, COD, location, variants).
 - If the message asks for missing info (price/stock/size/location/shipping/COD), ask ONE short clarifying question instead.
-`.trim();
+  `.trim();
 }
 
+
 // ---------- AI Functions ----------
-async function generateWithGemini({ reviewText, rating, tone, productName, platform }) {
+async function generateWithGemini({ reviewText, rating, tone }) {
   if (!genAI) throw new Error("Gemini API Key Missing");
 
+  // Gemini model name can change; "gemini-2.0-flash" is what you set
   const model = genAI.getGenerativeModel({
     model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
     systemInstruction: buildRules({ rating, tone, language: "taglish" }),
   });
 
-  const prompt = buildUserPrompt({
-    reviewText,
-    productName,
-    rating,
-    tone,
-    language: "taglish",
-    platform,
-  });
-
-  const result = await model.generateContent(prompt);
+  const result = await model.generateContent(String(reviewText));
   const text = result?.response?.text?.() || "";
   return String(text).trim();
 }
 
-async function generateWithGroq({ reviewText, rating, tone, language, productName, platform }) {
+async function generateWithGroq({ reviewText, rating, tone, language }) {
   if (!groq) throw new Error("Groq API Key Missing");
 
   const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
   const system = buildRules({ rating, tone, language });
-
-  const userPrompt = buildUserPrompt({
-    reviewText,
-    productName,
-    rating,
-    tone,
-    language,
-    platform,
-  });
 
   const completion = await groq.chat.completions.create({
     model,
@@ -212,7 +159,7 @@ async function generateWithGroq({ reviewText, rating, tone, language, productNam
     max_tokens: 220,
     messages: [
       { role: "system", content: system },
-      { role: "user", content: userPrompt },
+      { role: "user", content: String(reviewText) },
     ],
   });
 
@@ -230,29 +177,21 @@ app.get("/status", (req, res) => {
     port: String(PORT),
   });
 });
-
 // ---------- Main API Route ----------
 app.post("/api/generate-reply", async (req, res) => {
   try {
     const {
       reviewText,
-      productName, // ✅ optional
+      productName,           // ✅ NEW
       rating,
       tone,
-      language = "auto", // "english" | "taglish" | "auto"
+      language = "auto",
+      platform = req.body?.platform || req.body?.marketplace || "shopee",
       userId = "user_v18_launch",
     } = req.body || {};
 
-    // accept either "platform" or legacy "marketplace" from frontend
-    const platform = req.body?.platform || req.body?.marketplace || "shopee";
-
     const text = cleanText(reviewText);
-    if (!text) {
-      return res.status(400).json({
-        error: "BAD_REQUEST",
-        details: "reviewText is required",
-      });
-    }
+    if (!text) return res.status(400).json({ error: "BAD_REQUEST", details: "reviewText is required" });
 
     const safeTone = normalizeTone(tone);
     const safeRating = normalizeRating(rating);
@@ -266,9 +205,6 @@ app.post("/api/generate-reply", async (req, res) => {
     let reply = "";
     let engine = "";
 
-    // Routing:
-    // - Taglish -> Gemini primary, Groq fallback
-    // - English -> Groq primary
     if (lang === "taglish") {
       try {
         reply = await generateWithGemini({
@@ -305,13 +241,8 @@ app.post("/api/generate-reply", async (req, res) => {
 
     usageTracker[userId]++;
 
-    // final safety: ensure reply is not empty
     if (!reply) {
-      return res.status(500).json({
-        error: "AI_ERROR",
-        details: "Empty reply from engine",
-        engine,
-      });
+      return res.status(500).json({ error: "AI_ERROR", details: "Empty reply from engine", engine });
     }
 
     const finalReply = polishReply(reply, lang);
@@ -327,6 +258,7 @@ app.post("/api/generate-reply", async (req, res) => {
     res.status(500).json({ error: "SERVER_ERROR", details: err.message });
   }
 });
+
 
 app.listen(PORT, () => {
   console.log(`🚀 ReplyPilot Backend LIVE (Hybrid Router)
