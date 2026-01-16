@@ -105,16 +105,23 @@ async function groqReply(p) {
   });
   return c?.choices?.[0]?.message?.content || "";
 }
-
 async function geminiReply(p) {
   if (!genAI) throw new Error("GEMINI_NOT_CONFIGURED");
-  const model = genAI.getGenerativeModel({
-    model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
-    systemInstruction: buildRules({ ...p, language: "taglish" }),
-  });
-  const r = await model.generateContent(buildPrompt(p));
-  return r?.response?.text?.() || "";
+
+  const modelName = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+  const model = genAI.getGenerativeModel({ model: modelName });
+
+  // IMPORTANT: rules are embedded in the prompt (no systemInstruction)
+  const prompt = `
+${buildRules({ ...p, language: "taglish" })}
+
+${buildPrompt(p)}
+`.trim();
+
+  const r = await model.generateContent(prompt);
+  return r.response.text();
 }
+
 
 // --- REAL generate route (safe-mode OFF) ---
 app.post("/api/generate-reply", async (req, res) => {
@@ -159,4 +166,5 @@ app.post("/api/generate-reply", async (req, res) => {
 
 
 app.listen(PORT, () => console.log("ReplyPilot backend live on", PORT));
+
 
