@@ -123,48 +123,103 @@ ${buildPrompt(p)}
 }
 
 
-// --- REAL generate route (safe-mode OFF) ---
 app.post("/api/generate-reply", async (req, res) => {
   try {
-    const reviewText = clean(req.body?.reviewText);
-    if (!reviewText) return res.status(400).json({ error: "reviewText required" });
+    const text = (req.body.reviewText || "").toString().trim();
+    if (!text) return res.status(400).json({ error: "reviewText required" });
 
-    const lang = normalizeLanguage(req.body?.language, reviewText);
+    const langRaw = (req.body.language || "auto").toString().toLowerCase();
+    const lang = (langRaw === "taglish" || langRaw === "english")
+      ? langRaw
+      : (/[ñ]|(\b(po|opo|salamat|mabilis|sana|ang|ng|kasi|wala|meron)\b)/i.test(text) ? "taglish" : "english");
 
     const payload = {
-      reviewText,
-      productName: clean(req.body?.productName).slice(0, 60),
-      platform: req.body?.platform || "shopee",
-      rating: Number(req.body?.rating) || 5,
-      tone: req.body?.tone || "friendly",
+      reviewText: text,
+      rating: req.body.rating || 5,
+      tone: req.body.tone || "friendly",
       language: lang,
+      platform: req.body.platform || "shopee",
+      productName: (req.body.productName || "").toString().trim(),
     };
 
     let reply = "";
     let engine = "";
 
+    // Taglish primary = Gemini, fallback = Groq
     if (lang === "taglish") {
       try {
-        reply = await geminiReply(payload);
+        if (!genAI) throw new Error("GEMINI_NOT_CONFIGURED");
+        const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-2.0-flash" });
+
+        const prompt = `
+You are ReplyPilot, a Shopee/Lazada seller assistant.
+Write a short, natural Taglish reply to a ${payload.rating}-star review.
+
+Rules:
+- 1–3 sentences only
+- No prices, stock, shipping, COD, location
+- Sound like a real PH seller; polite but not OA
+${payload.productName ? `- Mention product name naturally: ${payload.productName}` : ""}
+
+Customer review:
+"${payload.reviewText}"
+`.trim();
+
+        const r = await model.generateContent(prompt);
+        reply = r.response.text();
         engine = "gemini";
       } catch (e) {
-        reply = await groqReply(payload);
+        console.log("GEMINI_ERROR:", e?.message || e);
+        if (!groq) throw new Error("GROQ_NOT_CONFIGURED");
+        const c = await groq.chat.completions.create({
+          model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+          temperature: 0.4,
+          max_tokens: 200,
+          messages: [
+            { role: "system", content: "You are ReplyPilot. Write short, natural Taglish replies for Shopee/Lazada sellers. 1–3 sentences. No placeholders." },
+            { role: "user", content: payload.reviewText }
+          ],
+        });
+        reply = c.choices?.[0]?.message?.content || "";
         engine = "groq-fallback";
       }
     } else {
-      reply = await groqReply(payload);
+      // English primary = Groq
+      if (!groq) throw new Error("GROQ_NOT_CONFIGURED");
+      const c = await groq.chat.completions.create({
+        model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+        temperature: 0.4,
+        max_tokens: 200,
+        messages: [
+          { role: "system", content: "You are ReplyPilot. Write short, friendly English seller replies. 1–3 sentences. No placeholders." },
+          { role: "user", content: payload.reviewText }
+        ],
+      });
+      reply = c.choices?.[0]?.message?.content || "";
       engine = "groq";
     }
 
-    if (!reply) return res.status(502).json({ error: "EMPTY_REPLY", engine });
+    reply = (reply || "").toString().trim();
+    if (!reply) return res.status(500).json({ error: "AI_ERROR", details: "Empty reply", engine });
 
-    return res.json({ reply: polish(reply, lang), engine, language: lang });
+    // light clean-up
+    if (lang === "taglish") {
+      reply = reply
+        .replace(/\brecieve\b/gi, "receive")
+        .replace(/\brecieved\b/gi, "received")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!/\bpo\b/i.test(reply)) reply += " Salamat po!";
+    }
+
+    res.json({ reply, engine, language: lang });
   } catch (e) {
-    return res.status(500).json({ error: "SERVER_ERROR", details: e.message });
+    res.status(500).json({ error: "SERVER_ERROR", details: e.message });
   }
 });
 
 
 app.listen(PORT, () => console.log("ReplyPilot backend live on", PORT));
+
 
 
