@@ -118,11 +118,12 @@ let usageTrackerDate = getTodayKey();
 
 function getTodayKey() {
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
-    now.getDate()
+  const phTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Manila" }));
+
+  return `${phTime.getFullYear()}-${String(phTime.getMonth() + 1).padStart(2, "0")}-${String(
+    phTime.getDate()
   ).padStart(2, "0")}`;
 }
-
 function resetUsageIfNewDay() {
   const today = getTodayKey();
   if (usageTrackerDate !== today) {
